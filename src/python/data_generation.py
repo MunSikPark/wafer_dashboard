@@ -1,11 +1,12 @@
-# C:\Users\munsikpark\data_generation.py
+# C:\Users\munsikpark\wafer_dashboard\src\python\data_generation.py
 from pathlib import Path
 import csv
 import re
 import sys
 
 # ----- 기본 설정 -----
-BASE_DIR = Path(r"C:\Users\munsikpark")  # 웨이퍼 csv들이 있는 폴더
+# 원시 웨이퍼 csv들이 있는 폴더 (C:\Users\munsikpark)
+BASE_DIR = Path(r"C:\Users\munsikpark")
 
 VSOA_PREFIX = "VSOA_"
 PGP_SUFFIX = "_PGP"
@@ -29,8 +30,20 @@ def parse_lot_wafer_from_filename(path: Path):
     return lot_part, wafer_part
 
 
-def is_valid_test_name(token: str) -> bool:
-    return TEST_NAME_RE.fullmatch(token) is not None
+def is_valid_test_name_token(token: str) -> bool:
+    """
+    테스트 이름 후보 필터:
+    - 대문자/숫자/언더스코어만
+    - '00' 제거
+    - 순수 숫자(1144 같은 count) 제거
+    """
+    if not TEST_NAME_RE.fullmatch(token):
+        return False
+    if token == "00":
+        return False
+    if token.isdigit():
+        return False
+    return True
 
 
 def is_nan_value(v: str) -> bool:
@@ -50,6 +63,8 @@ def is_nan_value(v: str) -> bool:
 def collect_meta_defs(raw_path: Path):
     """
     메타 영역에서 TREND_DEF / SERIES_DEF / time_profiler 수집
+    - 파일 시작부터
+    - 'END_PROBE_DEFS' 나올 때까지
     """
     trend_names = set()
     series_names = set()
@@ -62,22 +77,27 @@ def collect_meta_defs(raw_path: Path):
         pgp_suffix = PGP_SUFFIX
 
         for line in f:
-            if '"Head(' in line:
+            s = line.strip()
+
+            # 메타 데이터 종료 지점
+            if s.startswith("END_PROBE_DEFS"):
                 break
 
-            if "print_memory_usage" in line:
+            if "print_memory_usage" in s:
                 continue
 
-            if "time_profiler" in line:
+            # time_profiler 메타 라인 수집
+            if "time_profiler" in s:
                 time_profiler_lines.append(line.rstrip("\n"))
 
-            if "TREND_DEF" not in line and "SERIES_DEF" not in line:
+            if "TREND_DEF" not in s and "SERIES_DEF" not in s:
                 continue
 
-            tokens = line.strip().split()
+            tokens = s.split()
             kind = None
             start_idx = 0
 
+            # TREND_DEF / SERIES_DEF 위치 찾기
             for i, t in enumerate(tokens):
                 if t == "TREND_DEF":
                     kind = "TREND"
@@ -91,15 +111,19 @@ def collect_meta_defs(raw_path: Path):
             if kind is None:
                 continue
 
+            # 예)
+            #   TREND_DEF FINAL_FAIL_BIN_ASCII_2 00 keyword: ...
+            #   SERIES_DEF 1144 FINAL_BLOCK_BINS 00 keyword: ...
             name_token = None
             for token in tokens[start_idx:]:
-                if is_valid_test_name(token):
+                if is_valid_test_name_token(token):
                     name_token = token
                     break
 
             if not name_token:
                 continue
 
+            # VSOA_ / _PGP 필터
             if name_token.startswith(vsoa_prefix) or name_token.endswith(pgp_suffix):
                 continue
 
@@ -156,6 +180,7 @@ def process_die_data(
             s = line.rstrip("\n")
 
             if in_meta:
+                # END_PROBE_DEFS 이후에 die 데이터("Head(")가 나올 것
                 if '"Head(' in s:
                     in_meta = False
                     head, site, x, y = parse_head_site_xy(s)
@@ -202,6 +227,37 @@ def process_die_data(
                 srow([lot_id, wafer_id, head, site, x, y, key, value_raw])
 
 
+def write_unique_files_for_wafer(out_dir: Path, trend_names, series_names):
+    """
+    각 wafer 폴더(out_dir)에 UNIQUE_TREND / UNIQUE_SERIES 파일 생성.
+
+    예:
+      - BASE_DIR/<wafer_name>/UNIQUE_TREND.csv
+      - BASE_DIR/<wafer_name>/UNIQUE_SERIES.csv
+    """
+    trend_path = out_dir / "UNIQUE_TREND.csv"
+    series_path = out_dir / "UNIQUE_SERIES.csv"
+
+    # TREND
+    with trend_path.open("w", newline="", encoding="utf-8") as f_tr:
+        w = csv.writer(f_tr)
+        w.writerow(["test_name"])
+        for name in sorted(trend_names):
+            w.writerow([name])
+
+    # SERIES
+    with series_path.open("w", newline="", encoding="utf-8") as f_sr:
+        w = csv.writer(f_sr)
+        w.writerow(["test_name"])
+        for name in sorted(series_names):
+            w.writerow([name])
+
+    print(
+        f"  UNIQUE_TREND:  {len(trend_names)} -> {trend_path.name}\n"
+        f"  UNIQUE_SERIES: {len(series_names)} -> {series_path.name}"
+    )
+
+
 def run_for_wafer(wafer_name: str):
     """
     wafer_name 예: '4174991.081.4991-06.FPP.00'
@@ -223,12 +279,17 @@ def run_for_wafer(wafer_name: str):
     lot_id, wafer_id = parse_lot_wafer_from_filename(raw_path)
 
     print(f"=== Processing {wafer_name} ===")
-    print(f" Raw:   {raw_path}")
+    print(f" Raw:       {raw_path}")
     print(f" Lot/Wafer: {lot_id} / {wafer_id}")
     print(f" Out dir:   {out_dir}")
 
+    # 메타에서 트렌드/시리즈 이름 모으기 (END_PROBE_DEFS 까지)
     trend_names, series_names, timeprof_meta_lines = collect_meta_defs(raw_path)
 
+    # wafer 폴더에 unique 리스트 파일 생성
+    write_unique_files_for_wafer(out_dir, trend_names, series_names)
+
+    # time_profiler 메타 먼저 기록
     with timeprof_out.open("w", encoding="utf-8") as f:
         for line in timeprof_meta_lines:
             f.write(line + "\n")
@@ -236,6 +297,7 @@ def run_for_wafer(wafer_name: str):
     print(f"  TREND_DEF:  {len(trend_names)}")
     print(f"  SERIES_DEF: {len(series_names)}")
 
+    # die-level 데이터 처리
     process_die_data(
         raw_path,
         trend_names,
@@ -265,7 +327,7 @@ def main():
     for name in wafer_names:
         results.append(run_for_wafer(name))
 
-    print("Summary:")
+    print("\nSummary:")
     for r in results:
         print(f"  {r['wafer']}: {r['status']}")
 
