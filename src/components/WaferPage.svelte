@@ -49,50 +49,69 @@
 </script>
 
 <div class="min-h-[480px] px-8 pt-6 pb-10 bg-white">
-  <header class="flex items-center justify-between mb-4">
-    <div class="text-lg font-semibold text-slate-800">
-      Wafer Map Viewer
-    </div>
-
-    {#if currentWafer}
-      <div class="flex items-center gap-2 text-sm text-slate-700">
-        <button
-          class="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100"
-          on:click={prev}
-        >
-          &lt;
-        </button>
-
-        <div>
-          Wafer {currentWafer.wafer}
-          <span class="text-slate-500 ml-1">(Lot {currentWafer.lot})</span>
-          <span class="ml-2 text-xs text-slate-400">
-            {currentIndex + 1} / {wafers.length}
-          </span>
-        </div>
-
-        <button
-          class="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100"
-          on:click={next}
-        >
-          &gt;
-        </button>
+  <!-- 헤더 영역 -->
+  <header class="mb-4">
+    <div class="flex items-center gap-4">
+      <!-- 제목 -->
+      <div class="text-lg font-semibold text-slate-800">
+        Wafer Map Viewer
       </div>
-    {/if}
+
+      <!-- 제목 오른쪽에 바로 붙는 웨이퍼 선택 영역 -->
+      {#if currentWafer}
+        <div
+          class="flex items-center gap-2 text-xs text-slate-700
+                 bg-slate-100 px-3 py-1 rounded-full border border-slate-200"
+        >
+          <button
+            class="px-1.5 py-0.5 rounded-full border border-slate-300 bg-white hover:bg-slate-100"
+            type="button"
+            on:click={prev}
+          >
+            &lt;
+          </button>
+
+          <div class="flex items-center gap-1">
+            <span class="font-medium">
+              Wafer {currentWafer.wafer}
+            </span>
+            <span class="text-slate-500">
+              (Lot {currentWafer.lot})
+            </span>
+            <span class="ml-1 text-[10px] text-slate-400">
+              {currentIndex + 1} / {wafers.length}
+            </span>
+          </div>
+
+          <button
+            class="px-1.5 py-0.5 rounded-full border border-slate-300 bg-white hover:bg-slate-100"
+            type="button"
+            on:click={next}
+          >
+            &gt;
+          </button>
+        </div>
+      {/if}
+    </div>
   </header>
 
-  <!-- 핵심: 두 컬럼 레이아웃 -->
-  <main class="flex items-start gap-6">
+  <!-- 이하 나머지 main 부분은 그대로 유지 -->
+  <main class="flex items-start justify-start gap-6">
+    {#if loading}
+      <div class="text-slate-400">Loading wafer data...</div>
+    {:else if error}
+      <div class="text-red-500">Error: {error}</div>
+    {:else if !currentWafer}
+      <div class="text-slate-400">No wafer data.</div>
+    {:else}
+      <div class="flex-shrink-0">
+        <WaferMapPanel {currentWafer} wafer={currentWafer} />
+      </div>
 
-    <!-- 왼쪽: 웨이퍼맵 고정 폭 -->
-    <div class="shrink-0 w-[900px]">
-      <WaferMapPanel {currentWafer} wafer={currentWafer} />
-    </div>
-
-    <!-- 오른쪽: 트렌드 코릴레이션 패널 -->
-    <div class="flex-1 min-w-[420px]">
-      <TrendCorrelationPanel {trendNames} />
-    </div>
-
+      <div class="flex-1 min-w-[420px]">
+        <TrendCorrelationPanel {trendNames} />
+      </div>
+    {/if}
   </main>
 </div>
+
