@@ -3,12 +3,16 @@
 
   const dispatch = createEventDispatcher();
 
-  let waferId = "";
-  let lotId = "";
-  let message = "";
+  let waferIdsText = "";
 
   function submit() {
-    dispatch("submit", { waferId, lotId, message });
+    // 공백 기준으로 여러 개 웨이퍼 ID 파싱
+    const waferIds = waferIdsText
+      .split(/\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    dispatch("submit", { waferIds });
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -24,32 +28,12 @@
   </div>
 
   <div class="controls">
-    <label class="field">
-      <span class="field-label">Wafer ID</span>
-      <input
-        class="field-input"
-        placeholder="예: 24"
-        bind:value={waferId}
-        on:keydown={handleKeydown}
-      />
-    </label>
-
-    <label class="field">
-      <span class="field-label">Lot</span>
-      <input
-        class="field-input"
-        placeholder="예: 4175341"
-        bind:value={lotId}
-        on:keydown={handleKeydown}
-      />
-    </label>
-
     <label class="field field-wide">
-      <span class="field-label">옵션</span>
+      <span class="field-label">Wafer ID (여러 개 입력 시 공백으로 구분)</span>
       <input
         class="field-input"
-        placeholder="필터, 그룹 등 메모"
-        bind:value={message}
+        placeholder="예: 4174991.081.4991-06.FPP.00 4455451.0C1.5451-05.FPP.00"
+        bind:value={waferIdsText}
         on:keydown={handleKeydown}
       />
     </label>
@@ -101,7 +85,7 @@
   }
 
   .field-wide {
-    min-width: 240px;
+    min-width: 400px;
     flex: 1;
   }
 
@@ -150,7 +134,6 @@
     filter: brightness(0.95);
   }
 
-  /* 화면이 좁을 때는 인풋이 밑으로 내려가도록 */
   @media (max-width: 900px) {
     .top-bar {
       flex-direction: column;

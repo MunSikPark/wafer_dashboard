@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import WaferMapPanel from "./WaferMapPanel.svelte";
-  import TrendCorrelationPanel from "./TrendCorrelationPanel.svelte";
+  import WaferInputBar from "./WaferInputBar.svelte";
 
   const DATA_URL = "/wafer_bin.json";
 
@@ -9,16 +9,8 @@
   let currentIndex = 0;
   let loading = true;
   let error = "";
-
-  // 더미 트렌드 리스트
-  let trendNames: string[] = [
-    "GROSSICC",
-    "GROSSICC_PMUPS",
-    "VCC_PMU",
-    "OPENS_PMON",
-    "OPENS_VNEG",
-    "PTRES_PMON_PMU"
-  ];
+  let generating = false;
+  let generateMessage = "";
 
   $: currentWafer = wafers.length ? wafers[currentIndex] : null;
 
@@ -46,57 +38,58 @@
     if (!wafers.length) return;
     currentIndex = (currentIndex - 1 + wafers.length) % wafers.length;
   }
+
+  // WaferInputBar → submit 이벤트 처리
+  async function handleInputSubmit(event: CustomEvent<{ waferIds: string[] }>) {
+    const { waferIds } = event.detail;
+    console.log("Requested waferIds:", waferIds);
+
+    if (!waferIds.length) {
+      generateMessage = "웨이퍼 ID를 하나 이상 입력해주세요.";
+      return;
+    }
+
+    generating = true;
+    generateMessage = "데이터 생성 중...";
+
+    try {
+      const res = await fetch("/api/generate-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ waferIds })
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        console.error(json);
+        generateMessage = `에러: ${json.error ?? "서버 오류"}`;
+        return;
+      }
+
+      console.log("generate-data results:", json);
+      generateMessage = `데이터 생성 완료: ${json.waferIds.join(", ")}`;
+    } catch (e) {
+      console.error(e);
+      generateMessage = "요청 중 오류가 발생했습니다.";
+    } finally {
+      generating = false;
+    }
+  }
 </script>
 
-<div class="min-h-[480px] px-8 pt-6 pb-10 bg-white">
-  <!-- 헤더 영역 -->
-  <header class="mb-4">
-    <div class="flex items-center gap-4">
-      <!-- 제목 -->
-      <div class="text-lg font-semibold text-slate-800">
-        Wafer Map Viewer
-      </div>
+<div class="min-h-[480px] bg-white flex flex-col">
+  <!-- 상단 인풋 바 (한 번만!) -->
+  <WaferInputBar on:submit={handleInputSubmit} />
 
-      <!-- 제목 오른쪽에 바로 붙는 웨이퍼 선택 영역 -->
-      {#if currentWafer}
-        <div
-          class="flex items-center gap-2 text-xs text-slate-700
-                 bg-slate-100 px-3 py-1 rounded-full border border-slate-200"
-        >
-          <button
-            class="px-1.5 py-0.5 rounded-full border border-slate-300 bg-white hover:bg-slate-100"
-            type="button"
-            on:click={prev}
-          >
-            &lt;
-          </button>
-
-          <div class="flex items-center gap-1">
-            <span class="font-medium">
-              Wafer {currentWafer.wafer}
-            </span>
-            <span class="text-slate-500">
-              (Lot {currentWafer.lot})
-            </span>
-            <span class="ml-1 text-[10px] text-slate-400">
-              {currentIndex + 1} / {wafers.length}
-            </span>
-          </div>
-
-          <button
-            class="px-1.5 py-0.5 rounded-full border border-slate-300 bg-white hover:bg-slate-100"
-            type="button"
-            on:click={next}
-          >
-            &gt;
-          </button>
-        </div>
-      {/if}
+  <!-- 상태 메시지 -->
+  {#if generateMessage}
+    <div style="padding: 4px 20px; font-size: 12px; color: #4b5563;">
+      {generateMessage}
     </div>
-  </header>
+  {/if}
 
-  <!-- 이하 나머지 main 부분은 그대로 유지 -->
-  <main class="flex items-start justify-start gap-6">
+  <!-- 아래 메인 컨텐츠 -->
+  <div class="px-8 pt-4 pb-10">
     {#if loading}
       <div class="text-slate-400">Loading wafer data...</div>
     {:else if error}
@@ -104,14 +97,39 @@
     {:else if !currentWafer}
       <div class="text-slate-400">No wafer data.</div>
     {:else}
-      <div class="flex-shrink-0">
+      <header class="flex items-center justify-between mb-4">
+        <div class="text-lg font-semibold text-slate-800">
+          Wafer Map Viewer
+        </div>
+
+        <div class="flex items-center gap-2 text-sm text-slate-700">
+          <button
+            class="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100"
+            on:click={prev}
+          >
+            &lt;
+          </button>
+
+          <div>
+            Wafer {currentWafer.wafer}
+            <span class="text-slate-500 ml-1">(Lot {currentWafer.lot})</span>
+            <span class="ml-2 text-xs text-slate-400">
+              {currentIndex + 1} / {wafers.length}
+            </span>
+          </div>
+
+          <button
+            class="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100"
+            on:click={next}
+          >
+            &gt;
+          </button>
+        </div>
+      </header>
+
+      <main class="flex items-start justify-start">
         <WaferMapPanel {currentWafer} wafer={currentWafer} />
-      </div>
-
-      <div class="flex-1 min-w-[420px]">
-        <TrendCorrelationPanel {trendNames} />
-      </div>
+      </main>
     {/if}
-  </main>
+  </div>
 </div>
-
