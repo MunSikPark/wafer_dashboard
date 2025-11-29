@@ -1,14 +1,24 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import WaferMapPanel from "./WaferMapPanel.svelte";
+  import TrendCorrelationPanel from "./TrendCorrelationPanel.svelte";
 
   const DATA_URL = "/wafer_bin.json";
 
   let wafers: any[] = [];
   let currentIndex = 0;
-
-  let loading = true;     // ← 에러 원인: 이게 빠져 있었음
+  let loading = true;
   let error = "";
+
+  // 더미 트렌드 리스트
+  let trendNames: string[] = [
+    "GROSSICC",
+    "GROSSICC_PMUPS",
+    "VCC_PMU",
+    "OPENS_PMON",
+    "OPENS_VNEG",
+    "PTRES_PMON_PMU"
+  ];
 
   $: currentWafer = wafers.length ? wafers[currentIndex] : null;
 
@@ -16,7 +26,8 @@
     try {
       const res = await fetch(DATA_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      wafers = await res.json();
+      const data = await res.json();
+      wafers = data;
       currentIndex = 0;
     } catch (e) {
       console.error(e);
@@ -37,54 +48,51 @@
   }
 </script>
 
-<section class="flex flex-col flex-1 bg-slate-50">
-  <!-- 제목 + 좌우 네비, 전체는 좌측 정렬 -->
-  <header class="flex items-center justify-between px-8 pt-6 pb-2">
-    <h2 class="text-lg font-semibold text-slate-800">
+<div class="min-h-[480px] px-8 pt-6 pb-10 bg-white">
+  <header class="flex items-center justify-between mb-4">
+    <div class="text-lg font-semibold text-slate-800">
       Wafer Map Viewer
-    </h2>
+    </div>
 
     {#if currentWafer}
-      <div class="flex items-center gap-4 text-sm text-slate-700">
+      <div class="flex items-center gap-2 text-sm text-slate-700">
         <button
-          class="h-8 w-8 flex items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-100"
+          class="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100"
           on:click={prev}
         >
-          ‹
+          &lt;
         </button>
 
-        <span class="whitespace-nowrap">
+        <div>
           Wafer {currentWafer.wafer}
-          <span class="text-slate-400 mx-1">·</span>
-          Lot {currentWafer.lot}
-          <span class="text-slate-400 ml-2">
+          <span class="text-slate-500 ml-1">(Lot {currentWafer.lot})</span>
+          <span class="ml-2 text-xs text-slate-400">
             {currentIndex + 1} / {wafers.length}
           </span>
-        </span>
+        </div>
 
         <button
-          class="h-8 w-8 flex items-center justify-center rounded-full border border-slate-300 bg-white hover:bg-slate-100"
+          class="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100"
           on:click={next}
         >
-          ›
+          &gt;
         </button>
       </div>
     {/if}
   </header>
 
-  <!-- 본문: 왼쪽에 카드 붙이기 -->
-  <main class="flex-1 px-8 pb-10">
-    {#if loading}
-      <div class="mt-10 text-slate-500 text-sm">Loading wafer data…</div>
-    {:else if error}
-      <div class="mt-10 text-sm text-red-500">Error: {error}</div>
-    {:else if !currentWafer}
-      <div class="mt-10 text-slate-500 text-sm">No wafer data.</div>
-    {:else}
-      <div class="w-full flex justify-start">
-        <!-- 카드 크기: 한 화면의 일부만 차지 (대시보드용) -->
-        <WaferMapPanel wafer={currentWafer} />
-      </div>
-    {/if}
+  <!-- 핵심: 두 컬럼 레이아웃 -->
+  <main class="flex items-start gap-6">
+
+    <!-- 왼쪽: 웨이퍼맵 고정 폭 -->
+    <div class="shrink-0 w-[900px]">
+      <WaferMapPanel {currentWafer} wafer={currentWafer} />
+    </div>
+
+    <!-- 오른쪽: 트렌드 코릴레이션 패널 -->
+    <div class="flex-1 min-w-[420px]">
+      <TrendCorrelationPanel {trendNames} />
+    </div>
+
   </main>
-</section>
+</div>
