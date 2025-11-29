@@ -214,6 +214,13 @@ def run_for_wafer(wafer_name: str):
         return {"wafer": wafer_name, "status": "missing"}
 
     out_dir = BASE_DIR / wafer_name
+
+    # 이미 폴더가 있으면 생성 스킵
+    if out_dir.exists():
+        print(f"[INFO] Output dir already exists, skip generation: {out_dir}")
+        return {"wafer": wafer_name, "status": "exists"}
+
+    # 새 폴더 생성 (이미 존재해도 에러 안 나도록)
     out_dir.mkdir(exist_ok=True)
 
     trend_out = out_dir / "TREND_DATA.csv"

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import WaferMapPanel from "./WaferMapPanel.svelte";
   import WaferInputBar from "./WaferInputBar.svelte";
+  import TrendCorrelationPanel from "./TrendCorrelationPanel.svelte";
 
   const DATA_URL = "/wafer_bin.json";
 
@@ -11,6 +12,10 @@
   let error = "";
   let generating = false;
   let generateMessage = "";
+
+  // 상관계수 패널용 상태 (나중에 실제 값 채울 예정)
+  let corrTargetName = "";
+  let correlations: any[] = [];
 
   $: currentWafer = wafers.length ? wafers[currentIndex] : null;
 
@@ -77,59 +82,170 @@
   }
 </script>
 
-<div class="min-h-[480px] bg-white flex flex-col">
+<div class="wafer-page-root">
   <!-- 상단 인풋 바 (한 번만!) -->
   <WaferInputBar on:submit={handleInputSubmit} />
 
   <!-- 상태 메시지 -->
   {#if generateMessage}
-    <div style="padding: 4px 20px; font-size: 12px; color: #4b5563;">
+    <div class="status-message">
       {generateMessage}
     </div>
   {/if}
 
-  <!-- 아래 메인 컨텐츠 -->
-  <div class="px-8 pt-4 pb-10">
+  <!-- 메인 컨텐츠 -->
+  <div class="content-area">
     {#if loading}
-      <div class="text-slate-400">Loading wafer data...</div>
+      <div class="text-muted">Loading wafer data...</div>
     {:else if error}
-      <div class="text-red-500">Error: {error}</div>
+      <div class="text-error">Error: {error}</div>
     {:else if !currentWafer}
-      <div class="text-slate-400">No wafer data.</div>
+      <div class="text-muted">No wafer data.</div>
     {:else}
-      <header class="flex items-center justify-between mb-4">
-        <div class="text-lg font-semibold text-slate-800">
-          Wafer Map Viewer
-        </div>
-
-        <div class="flex items-center gap-2 text-sm text-slate-700">
-          <button
-            class="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100"
-            on:click={prev}
-          >
-            &lt;
-          </button>
-
-          <div>
-            Wafer {currentWafer.wafer}
-            <span class="text-slate-500 ml-1">(Lot {currentWafer.lot})</span>
-            <span class="ml-2 text-xs text-slate-400">
-              {currentIndex + 1} / {wafers.length}
-            </span>
-          </div>
-
-          <button
-            class="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100"
-            on:click={next}
-          >
-            &gt;
-          </button>
-        </div>
+      <!-- 제목 -->
+      <header class="page-header">
+        <div class="page-title">Wafer Map Viewer</div>
       </header>
 
-      <main class="flex items-start justify-start">
-        <WaferMapPanel {currentWafer} wafer={currentWafer} />
+      <!-- 두 컬럼 레이아웃 -->
+      <main class="main-row">
+        <!-- LEFT: 웨이퍼 선택 + 웨이퍼 맵 -->
+        <section class="left-column">
+          <!-- 네비게이션을 웨이퍼 맵 바로 위로 -->
+          <div class="wafer-nav">
+            <button class="nav-button" on:click={prev}>&lt;</button>
+
+            <div class="wafer-label">
+              Wafer {currentWafer.wafer}
+              <span class="wafer-lot">(Lot {currentWafer.lot})</span>
+              <span class="wafer-index">
+                {currentIndex + 1} / {wafers.length}
+              </span>
+            </div>
+
+            <button class="nav-button" on:click={next}>&gt;</button>
+          </div>
+
+          <!-- 실제 웨이퍼 맵 패널 -->
+          <WaferMapPanel wafer={currentWafer} />
+        </section>
+
+        <!-- RIGHT: 피어슨 상관계수 패널 -->
+        <section class="right-column">
+          <TrendCorrelationPanel
+            targetName={corrTargetName}
+            {correlations}
+          />
+        </section>
       </main>
     {/if}
   </div>
 </div>
+
+<style>
+  .wafer-page-root {
+    min-height: 480px;
+    background-color: #ffffff;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .status-message {
+    padding: 4px 20px;
+    font-size: 12px;
+    color: #4b5563;
+  }
+
+  .content-area {
+    padding: 16px 32px 40px;
+  }
+
+  .text-muted {
+    color: #9ca3af;
+    font-size: 0.875rem;
+  }
+
+  .text-error {
+    color: #ef4444;
+    font-size: 0.875rem;
+  }
+
+  .page-header {
+    margin-bottom: 12px;
+  }
+
+  .page-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #111827;
+  }
+
+  /* === 레이아웃 === */
+  .main-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .left-column {
+    flex: 0 0 auto;
+    min-width: 560px;
+  }
+
+  .right-column {
+    flex: 0 0 420px;
+    max-width: 420px;
+  }
+
+  /* === 네비게이션 부분 (간격 줄인 버전) === */
+  .wafer-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;             /* 버튼 ↔ 텍스트 간격 (스페이스 4칸 정도) */
+    margin-bottom: 12px;
+  }
+
+  .nav-button {
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #ffffff;
+    cursor: pointer;
+  }
+
+  .nav-button:hover {
+    background-color: #f3f4f6;
+  }
+
+  .wafer-label {
+    /* flex:1 없애고 내용 크기만큼만 차지하게 */
+    flex: 0 0 auto;
+    text-align: center;
+    font-size: 0.9rem;
+  }
+
+  .wafer-lot {
+    color: #6b7280;
+    margin-left: 4px;
+  }
+
+  .wafer-index {
+    margin-left: 8px;
+    font-size: 11px;
+    color: #9ca3af;
+  }
+
+  @media (max-width: 1200px) {
+    .main-row {
+      flex-direction: column;
+    }
+
+    .left-column,
+    .right-column {
+      min-width: 0;
+      width: 100%;
+      flex: 1 1 auto;
+    }
+  }
+</style>
