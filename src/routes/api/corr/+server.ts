@@ -38,9 +38,7 @@ function pearson(xArr: number[], yArr: number[]): number {
   const mx = sumX / n;
   const my = sumY / n;
 
-  let num = 0;
-  let dx = 0;
-  let dy = 0;
+  let num = 0, dx = 0, dy = 0;
 
   for (let i = 0; i < n; i++) {
     const ax = xArr[i] - mx;
@@ -60,41 +58,28 @@ export const POST: RequestHandler = async ({ request }) => {
   const body = await request.json();
   const waferId = body.waferId?.trim();
   const target = body.target?.trim();
-  const kind = (body.kind ?? 'trend').trim(); // 'trend' | 'series'
+  const kind = (body.kind ?? 'trend').trim();
 
   if (!waferId || !target) {
-    return new Response(
-      JSON.stringify({ error: 'waferId, target 둘 다 필요합니다.' }),
-      { status: 400 }
-    );
+    return new Response(JSON.stringify({ error: 'waferId, target 둘 다 필요합니다.' }), { status: 400 });
   }
 
-  const dataFile =
-    kind === 'series' ? 'SERIES_DATA.csv' : 'TREND_DATA.csv';
-
+  const dataFile = kind === 'series' ? 'SERIES_DATA.csv' : 'TREND_DATA.csv';
   const trendPath = path.join(BASE_DIR, waferId, dataFile);
 
   let csvText: string;
   try {
     csvText = await fs.readFile(trendPath, 'utf-8');
   } catch (err) {
-    return new Response(
-      JSON.stringify({
-        error: `${dataFile} 를 읽을 수 없습니다: ${trendPath}`
-      }),
-      { status: 500 }
-    );
+    return new Response(JSON.stringify({ error: `${dataFile} 를 읽을 수 없습니다: ${trendPath}` }), { status: 500 });
   }
 
   const { rows } = parseCsv(csvText);
   if (rows.length === 0) {
-    return new Response(
-      JSON.stringify({ error: '데이터 행이 없습니다.' }),
-      { status: 500 }
-    );
+    return new Response(JSON.stringify({ error: '데이터 행이 없습니다.' }), { status: 500 });
   }
 
-  // 1) 한 번만 돌면서 test_name -> number[] 맵을 만든다
+  // 빠른 맵 구성
   const seriesMap = new Map<string, number[]>();
 
   for (const r of rows as any[]) {
@@ -112,44 +97,32 @@ export const POST: RequestHandler = async ({ request }) => {
     arr.push(v);
   }
 
-  const testNames = Array.from(seriesMap.keys());
-
-  // target 존재 여부 체크
   if (!seriesMap.has(target)) {
-    return new Response(
-      JSON.stringify({
-        error: `target '${target}' 이 ${dataFile} 에 존재하지 않습니다.`
-      }),
-      { status: 400 }
-    );
+    return new Response(JSON.stringify({ error: `target '${target}' 이 ${dataFile} 에 존재하지 않습니다.` }), { status: 400 });
   }
 
   const targetVals = seriesMap.get(target)!;
-  const results: { name: string; r: number }[] = [];
 
-  // 2) 맵에서 바로 꺼내서 코릴레이션 계산
+  // ★ 바뀐 부분: n을 추가
+  const results: { name: string; r: number; n: number }[] = [];
+
   for (const [name, vals] of seriesMap.entries()) {
     if (name === target) continue;
 
-    // 길이가 다르면 스킵 (alignment 를 안 맞추고 단순 비교)
     if (vals.length !== targetVals.length) continue;
 
     const r = pearson(targetVals, vals);
     if (!Number.isNaN(r)) {
-      results.push({ name, r });
+      results.push({ name, r, n: vals.length });  // ★ n 추가
     }
   }
 
-  // 절댓값 기준으로 정렬
   results.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
 
-  return new Response(
-    JSON.stringify({
-      waferId,
-      kind,
-      target,
-      top: results.slice(0, 30)
-    }),
-    { status: 200 }
-  );
+  return new Response(JSON.stringify({
+    waferId,
+    kind,
+    target,
+    top: results.slice(0, 30)
+  }), { status: 200 });
 };
