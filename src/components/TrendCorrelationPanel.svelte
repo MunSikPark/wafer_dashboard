@@ -5,6 +5,7 @@
   type CorrItem = {
     name: string;
     r: number;
+    n: number;   // ★ 추가
   };
 
   let selectedWafer = '';
@@ -21,7 +22,7 @@
   let correlations: CorrItem[] = [];
 
   // 새로 추가: 부호 필터 (All / + / -)
-  let signFilter: 'all' | 'pos' | 'neg' = 'all';
+  let signFilter: 'pos' | 'neg' = 'pos';
 
   // waferOptions 가 들어오면 자동으로 첫 개 선택
   $: if (!selectedWafer && waferOptions.length > 0) {
@@ -111,11 +112,12 @@
       corrTargetName = json.target;
       correlations = (json.top ?? []).map((x: any) => ({
         name: x.name,
-        r: Number(x.r)
+        r: Number(x.r),
+        n: Number(x.n)    // ★ 추가
       }));
+      // 기본 선택: 양수 Top 30
+      signFilter = 'pos';   // ★ 이 한 줄이 핵심
 
-      // 새로 계산했으니 부호 필터는 All로 리셋
-      signFilter = 'all';
     } catch (e) {
       console.error(e);
       errorMsg = '피어슨 상관계수 계산 중 오류가 발생했습니다.';
@@ -132,14 +134,28 @@
     return `hsl(${hue}, 70%, ${light}%)`;
   }
 
-  // 부호 필터 적용된 결과
-  $: filteredCorrelations = correlations.length
-    ? correlations.filter((c) => {
-        if (signFilter === 'pos') return c.r >= 0;
-        if (signFilter === 'neg') return c.r <= 0;
-        return true; // all
-      })
-    : [];
+  //Positive / Negative cal
+  $: filteredCorrelations = (() => {
+    if (!correlations.length) return [];
+
+    if (signFilter === 'pos') {
+      return correlations
+        .filter((c) => c.r >= 0)
+        .sort((a, b) => b.r - a.r)
+        .slice(0, 30);
+    }
+
+    if (signFilter === 'neg') {
+      return correlations
+        .filter((c) => c.r <= 0)
+        .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
+        .slice(0, 30);
+    }
+
+    return [];
+  })();
+
+
 
   $: maxAbs = filteredCorrelations.length
     ? Math.max(...filteredCorrelations.map((c) => Math.abs(c.r)))
@@ -216,7 +232,7 @@
       <div class="sub-text">
         Showing Pearson correlation with
         <span class="highlight">{corrTargetName}</span>
-        {' '}({filteredCorrelations.length} tests, top 30)
+        {' '}({signFilter === 'pos' ? 'Positive Top 30' : 'Negative Top 30'})
       </div>
     {:else}
       <div class="sub-text">
@@ -235,13 +251,6 @@
       <span>Top correlated tests</span>
 
       <div class="heat-controls">
-        <button
-          type="button"
-          class:selected={signFilter === 'all'}
-          on:click={() => (signFilter = 'all')}
-        >
-          All
-        </button>
         <button
           type="button"
           class:selected={signFilter === 'pos'}
@@ -279,6 +288,7 @@
             />
             <div class="heat-value">
               {item.r.toFixed(3)}
+              <span class="heat-n">n={item.n}</span>
             </div>
           </div>
         {/each}
@@ -549,6 +559,12 @@ select:focus {
   font-size: 11px;
   color: #374151;
   font-variant-numeric: tabular-nums;
+}
+
+.heat-n {
+  margin-left: 4px;
+  font-size: 10px;
+  color: #6b7280;
 }
 
 </style>
