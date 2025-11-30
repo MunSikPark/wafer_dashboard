@@ -270,11 +270,28 @@ def run_for_wafer(wafer_name: str):
         return {"wafer": wafer_name, "status": "missing"}
 
     out_dir = BASE_DIR / wafer_name
-    out_dir.mkdir(exist_ok=True)
 
+    # 결과 파일 경로들 미리 정의
     trend_out = out_dir / "TREND_DATA.csv"
     series_out = out_dir / "SERIES_DATA.csv"
     timeprof_out = out_dir / "TIME_PROFILER.txt"
+    unique_trend = out_dir / "UNIQUE_TREND.csv"
+    unique_series = out_dir / "UNIQUE_SERIES.csv"
+
+    # ★ 이미 폴더 + 5개 결과 파일이 모두 있으면 바로 스킵
+    if (
+        out_dir.exists()
+        and trend_out.exists()
+        and series_out.exists()
+        and timeprof_out.exists()
+        and unique_trend.exists()
+        and unique_series.exists()
+    ):
+        print(f"[INFO] {wafer_name}: output already exists, skip generation")
+        return {"wafer": wafer_name, "status": "exists"}
+
+    # 여기까지 왔다는 건 뭔가 하나라도 없다는 뜻 → 새로 생성
+    out_dir.mkdir(exist_ok=True)
 
     lot_id, wafer_id = parse_lot_wafer_from_filename(raw_path)
 
@@ -311,7 +328,6 @@ def run_for_wafer(wafer_name: str):
 
     print(f"=== Done {wafer_name} ===\n")
     return {"wafer": wafer_name, "status": "ok"}
-
 
 def main():
     # 인자로 여러 wafer_name 을 받는다.
