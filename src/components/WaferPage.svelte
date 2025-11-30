@@ -13,7 +13,9 @@
   let generating = false;
   let generateMessage = "";
 
-  // 상관계수 패널용 상태 (나중에 실제 값 채울 예정)
+  // 상관계수 패널용 상태
+  let generatedWaferIds: string[] = [];   // <= 새로 추가
+
   let corrTargetName = "";
   let correlations: any[] = [];
 
@@ -73,6 +75,9 @@
 
       console.log("generate-data results:", json);
       generateMessage = `데이터 생성 완료: ${json.waferIds.join(", ")}`;
+
+      // 상관계수 패널에서 사용할 lot / wafer 목록 저장
+      generatedWaferIds = json.waferIds ?? [];
     } catch (e) {
       console.error(e);
       generateMessage = "요청 중 오류가 발생했습니다.";
@@ -83,17 +88,14 @@
 </script>
 
 <div class="wafer-page-root">
-  <!-- 상단 인풋 바 (한 번만!) -->
   <WaferInputBar on:submit={handleInputSubmit} />
 
-  <!-- 상태 메시지 -->
   {#if generateMessage}
     <div class="status-message">
       {generateMessage}
     </div>
   {/if}
 
-  <!-- 메인 컨텐츠 -->
   <div class="content-area">
     {#if loading}
       <div class="text-muted">Loading wafer data...</div>
@@ -102,16 +104,12 @@
     {:else if !currentWafer}
       <div class="text-muted">No wafer data.</div>
     {:else}
-      <!-- 제목 -->
       <header class="page-header">
         <div class="page-title">Wafer Map Viewer</div>
       </header>
 
-      <!-- 두 컬럼 레이아웃 -->
       <main class="main-row">
-        <!-- LEFT: 웨이퍼 선택 + 웨이퍼 맵 -->
         <section class="left-column">
-          <!-- 네비게이션을 웨이퍼 맵 바로 위로 -->
           <div class="wafer-nav">
             <button class="nav-button" on:click={prev}>&lt;</button>
 
@@ -126,16 +124,11 @@
             <button class="nav-button" on:click={next}>&gt;</button>
           </div>
 
-          <!-- 실제 웨이퍼 맵 패널 -->
           <WaferMapPanel wafer={currentWafer} />
         </section>
 
-        <!-- RIGHT: 피어슨 상관계수 패널 -->
         <section class="right-column">
-          <TrendCorrelationPanel
-            targetName={corrTargetName}
-            {correlations}
-          />
+          <TrendCorrelationPanel waferOptions={generatedWaferIds} />
         </section>
       </main>
     {/if}
@@ -143,6 +136,7 @@
 </div>
 
 <style>
+  /* 기존 스타일 그대로 (생략 없이 유지) */
   .wafer-page-root {
     min-height: 480px;
     background-color: #ffffff;
@@ -180,7 +174,6 @@
     color: #111827;
   }
 
-  /* === 레이아웃 === */
   .main-row {
     display: flex;
     align-items: flex-start;
@@ -197,12 +190,11 @@
     max-width: 420px;
   }
 
-  /* === 네비게이션 부분 (간격 줄인 버전) === */
   .wafer-nav {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;             /* 버튼 ↔ 텍스트 간격 (스페이스 4칸 정도) */
+    gap: 8px;
     margin-bottom: 12px;
   }
 
@@ -219,7 +211,6 @@
   }
 
   .wafer-label {
-    /* flex:1 없애고 내용 크기만큼만 차지하게 */
     flex: 0 0 auto;
     text-align: center;
     font-size: 0.9rem;
