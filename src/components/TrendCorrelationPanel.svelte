@@ -20,6 +20,9 @@
   let corrTargetName = '';
   let correlations: CorrItem[] = [];
 
+  // 새로 추가: 부호 필터 (All / + / -)
+  let signFilter: 'all' | 'pos' | 'neg' = 'all';
+
   // waferOptions 가 들어오면 자동으로 첫 개 선택
   $: if (!selectedWafer && waferOptions.length > 0) {
     selectedWafer = waferOptions[0];
@@ -110,6 +113,9 @@
         name: x.name,
         r: Number(x.r)
       }));
+
+      // 새로 계산했으니 부호 필터는 All로 리셋
+      signFilter = 'all';
     } catch (e) {
       console.error(e);
       errorMsg = '피어슨 상관계수 계산 중 오류가 발생했습니다.';
@@ -126,8 +132,17 @@
     return `hsl(${hue}, 70%, ${light}%)`;
   }
 
-  $: maxAbs = correlations.length
-    ? Math.max(...correlations.map((c) => Math.abs(c.r)))
+  // 부호 필터 적용된 결과
+  $: filteredCorrelations = correlations.length
+    ? correlations.filter((c) => {
+        if (signFilter === 'pos') return c.r >= 0;
+        if (signFilter === 'neg') return c.r <= 0;
+        return true; // all
+      })
+    : [];
+
+  $: maxAbs = filteredCorrelations.length
+    ? Math.max(...filteredCorrelations.map((c) => Math.abs(c.r)))
     : 1;
 </script>
 
@@ -199,8 +214,9 @@
       <div class="sub-text">테스트 목록을 불러오는 중...</div>
     {:else if corrTargetName}
       <div class="sub-text">
-        Showing Pearson correlation with <span class="highlight">{corrTargetName}</span>
-        {' '}({correlations.length} tests, top 30 by |r|)
+        Showing Pearson correlation with
+        <span class="highlight">{corrTargetName}</span>
+        {' '}({filteredCorrelations.length} tests, top 30)
       </div>
     {:else}
       <div class="sub-text">
@@ -217,16 +233,40 @@
   <div class="card heat-card">
     <div class="heat-header">
       <span>Top correlated tests</span>
-      <span class="heat-unit">Pearson r</span>
+
+      <div class="heat-controls">
+        <button
+          type="button"
+          class:selected={signFilter === 'all'}
+          on:click={() => (signFilter = 'all')}
+        >
+          All
+        </button>
+        <button
+          type="button"
+          class:selected={signFilter === 'pos'}
+          on:click={() => (signFilter = 'pos')}
+        >
+          +
+        </button>
+        <button
+          type="button"
+          class:selected={signFilter === 'neg'}
+          on:click={() => (signFilter = 'neg')}
+        >
+          -
+        </button>
+        <span class="heat-unit">Pearson r</span>
+      </div>
     </div>
 
     {#if loadingCorr}
       <div class="sub-text">상관계수 계산 중...</div>
-    {:else if !correlations.length}
+    {:else if !filteredCorrelations.length}
       <div class="sub-text">결과가 없습니다.</div>
     {:else}
       <div class="heat-list">
-        {#each correlations as item}
+        {#each filteredCorrelations.slice(0, 30) as item}
           <div class="heat-row">
             <div class="heat-name" title={item.name}>
               {item.name}
@@ -248,211 +288,267 @@
 </div>
 
 <style>
-  .panel-root {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    height: 100%;
-  }
+/* =========================
+   AWS Console 느낌 라이트 테마
+   ========================= */
 
-  .card {
-    border-radius: 12px;
-    border: 1px solid #111827;
-    background: #111827;
-    padding: 12px 14px;
-    color: #e5e7eb;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 12px;
-  }
+.panel-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
 
-  .header-card {
-    background: #374151;
-    border-color: #4b5563;
-  }
+/* 공통 카드 – AWS 콘솔 카드 느낌 */
+.card {
+  border-radius: 8px;
+  border: 1px solid #d1d5db;         /* 연한 회색 보더 */
+  background: #ffffff;                /* 완전 흰색 카드 */
+  padding: 12px 14px;
+  color: #111827;
+  font-size: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); /* 아주 약한 그림자 */
+}
 
-  .heat-card {
-    background: #020617;
-    border-color: #111827;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 240px;
-  }
+.header-card {
+  background: #f9fafb;                /* 콘솔 상단 패널 같은 연한 회색 */
+  border-color: #d1d5db;
+}
 
-  .header-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-  }
+.heat-card {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 240px;
+}
 
-  .header-title {
-    font-size: 11px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: #cbd5f5;
-  }
+/* -------------------- 헤더 영역 -------------------- */
 
-  .kind-toggle {
-    display: inline-flex;
-    background: #1f2933;
-    border-radius: 999px;
-    padding: 2px;
-    gap: 2px;
-  }
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
 
-  .kind-toggle button {
-    border: none;
-    padding: 2px 8px;
-    font-size: 11px;
-    border-radius: 999px;
-    background: transparent;
-    color: #9ca3af;
-    cursor: pointer;
-  }
+.header-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #374151;
+}
 
-  .kind-toggle button.selected {
-    background: #6366f1;
-    color: white;
-  }
+/* Trend / Series 토글 – 콘솔의 세그먼트 버튼 느낌 */
 
-  .control-row {
-    display: flex;
-    gap: 8px;
-    align-items: flex-end;
-    margin-bottom: 6px;
-  }
+.kind-toggle {
+  display: inline-flex;
+  background: #e5e7eb;
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
 
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 150px;
-  }
+.kind-toggle button {
+  border: none;
+  padding: 3px 10px;
+  font-size: 11px;
+  border-radius: 999px;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+}
 
-  .field-label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #d1d5db;
-  }
+.kind-toggle button.selected {
+  background: #2563eb;  /* AWS 콘솔 버튼 느낌의 파랑 */
+  color: #ffffff;
+}
 
-  select {
-    height: 26px;
-    border-radius: 6px;
-    border: 1px solid #4b5563;
-    background: #111827;
-    color: #e5e7eb;
-    padding: 2px 6px;
-    font-size: 12px;
-  }
+/* -------------------- 입력 컨트롤 -------------------- */
 
-  .flex-1 {
-    flex: 1;
-  }
+.control-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-bottom: 6px;
+}
 
-  .combo-row {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+}
 
-  .combo-input {
-    flex: 1;
-    height: 26px;
-    border-radius: 6px;
-    border: 1px solid #4b5563;
-    background: #020617;
-    color: #e5e7eb;
-    padding: 2px 6px;
-    font-size: 12px;
-  }
+.field-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+}
 
-  .combo-input::placeholder {
-    color: #6b7280;
-  }
+select {
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  padding: 0 8px;
+  font-size: 12px;
+}
 
-  .apply-btn {
-    height: 26px;
-    padding: 0 10px;
-    border-radius: 999px;
-    border: none;
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
-    color: white;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-  }
+select:focus {
+  outline: 2px solid #2563eb33;
+  border-color: #2563eb;
+}
 
-  .apply-btn:hover {
-    filter: brightness(1.05);
-  }
+.flex-1 {
+  flex: 1;
+}
 
-  .sub-text {
-    margin-top: 4px;
-    font-size: 11px;
-    color: #d1d5db;
-  }
+.combo-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
 
-  .highlight {
-    font-weight: 600;
-    color: #facc15;
-  }
+.combo-input {
+  flex: 1;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  padding: 0 8px;
+  font-size: 12px;
+}
 
-  .error-text {
-    margin-top: 4px;
-    font-size: 11px;
-    color: #f87171;
-  }
+.combo-input::placeholder {
+  color: #9ca3af;
+}
 
-  .heat-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 4px;
-    font-size: 11px;
-    color: #9ca3af;
-  }
+.combo-input:focus {
+  outline: 2px solid #2563eb33;
+  border-color: #2563eb;
+}
 
-  .heat-unit {
-    font-size: 10px;
-  }
+/* Apply 버튼 – AWS 파랑 버튼 느낌 */
 
-  .heat-list {
-    margin-top: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    overflow-y: auto;
-  }
+.apply-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
 
-  .heat-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.2fr) auto;
-    gap: 6px;
-    align-items: center;
-  }
+.apply-btn:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
 
-  .heat-name {
-    font-size: 11px;
-    color: #e5e7eb;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+/* -------------------- 안내 / 에러 텍스트 -------------------- */
 
-  .heat-bar {
-    height: 10px;
-    border-radius: 999px;
-    background: #1f2937;
-    transition: all 0.2s ease;
-  }
+.sub-text {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #4b5563;
+}
 
-  .heat-value {
-    width: 3.2rem;
-    text-align: right;
-    font-size: 11px;
-    color: #d1d5db;
-    font-variant-numeric: tabular-nums;
-  }
+.highlight {
+  font-weight: 600;
+  color: #b45309;
+}
+
+.error-text {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #dc2626;
+}
+
+/* -------------------- 상단 라벨 / 필터 영역 -------------------- */
+
+.heat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.heat-unit {
+  font-size: 10px;
+  color: #4b5563;
+}
+
+/* 만약 All / + / - 버튼 같은 필터를 이미 쓰고 있다면 */
+.heat-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.heat-controls button {
+  border: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.heat-controls button.selected {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+/* -------------------- 상관계수 리스트 (히트맵 바) -------------------- */
+
+.heat-list {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.heat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.2fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.heat-name {
+  font-size: 11px;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.heat-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.heat-value {
+  width: 3.2rem;
+  text-align: right;
+  font-size: 11px;
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+}
+
 </style>
